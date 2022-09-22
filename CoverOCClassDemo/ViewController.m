@@ -29,7 +29,15 @@
     
     
     CoverRiskLevel level = [CoverClassTool getRiskLevelWithClass:[PersonClass class] beCoveredClass:[CarClass class]];
-    NSLog(@"=====");
+    
+    
+    NSDictionary *lev = @{
+        @(CoverRiskLevelLow) : @"CoverRiskLevelLow",      // 成员变量顺序相同，且布局相同
+        @(CoverRiskLevelAccept) : @"CoverRiskLevelAccept",   // 成员变量顺序不同，强弱引用相同
+        @(CoverRiskLevelMiddle) : @"CoverRiskLevelMiddle",   // 成员变量相同，强弱引用不相同
+        @(CoverRiskLevelHigh) : @"CoverRiskLevelHigh",     // 成员变量不相同，个数不同，名字不同
+    };
+    NSLog(@"===== %@", lev[@(level)]);
 }
 
 

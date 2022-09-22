@@ -131,48 +131,79 @@
     // 顺序不同，强弱引用
     [varSet removeAllObjects];
     
-    void(^checkLayout)(Ivar *, const uint8_t *, BOOL) = ^(Ivar *list, const uint8_t *layout, BOOL inc) {
-        unsigned int ivarIndex = 0;
-        while (*layout != 0x00 || ivarIndex < uCount) {
-            if (*layout != 0x00) {
-                int weakCnt = (*layout & 0xf0) >> 4;
-                int strongCnt = *layout & 0xf;
-                int repeatCnt = weakCnt + strongCnt;
-                
-                while (repeatCnt > 0 && ivarIndex < uCount) {
-                    Ivar var = list[ivarIndex++];
-                    ptrdiff_t offset = ivar_getOffset(var);
-                    if ((offset & 0b111) == 0) {
-                        bool isStrong = weakCnt -- <= 0;
-                        if (isStrong) {
-                            NSString *strongVarName = [NSString stringWithUTF8String:ivar_getName(var)];
-                            if (inc) {
-                                [varSet addObject:strongVarName];
-                            } else {
-                                [varSet removeObject:strongVarName];
-                            }
-                        }
-                        -- repeatCnt;
-                    }
-                }
-                ++ layout;
-            } else {
-                // 全是weak
-                while (ivarIndex < uCount) {
-                    ivarIndex++;
-                }
-            }
+    [self _checkLayout:uList count:uCount layout:uLayout callback:^(BOOL isStrong, NSString *varName) {
+        if (isStrong) {
+            [varSet addObject:varName];
         }
-    };
-    
-    checkLayout(uList, uLayout, YES);
-    checkLayout(cList, cLayout, NO);
+    }];
+    [self _checkLayout:cList count:cCount layout:cLayout callback:^(BOOL isStrong, NSString *varName) {
+        if (isStrong) {
+            [varSet removeObject:varName];
+        }
+    }];
     
     // 4. 强弱引用不同，中风险
     if (varSet.count) return CoverRiskLevelMiddle;
     
     // 5. 顺序不同，强弱引用相同，可接受（若顺序相同强弱引用也相同，则layout相同）
     return CoverRiskLevelAccept;
+}
+
++ (NSArray <NSString *>*)getIvarReferenceInfo:(Class)cls {
+    if ([cls isKindOfClass:[NSObject class]]) {
+        return @[];
+    }
+    
+    unsigned int count;
+    Ivar *list = class_copyIvarList(cls, &count);
+    const uint8_t *layout = class_getIvarLayout(cls);
+    
+    // 纯swift类layout位null
+    if (layout == NULL) {
+        return @[];
+    }
+    
+    NSMutableArray *arr = [NSMutableArray arrayWithCapacity:count];
+    [self _checkLayout:list count:count layout:layout callback:^(BOOL isStrong, NSString *varName) {
+        NSString *aimString = [NSString stringWithFormat:@"%@_%@", isStrong ? @"S" : @"W", varName];
+        [arr addObject:aimString];
+    }];
+    return arr.copy;
+}
+
++ (void)_checkLayout:(Ivar *)list count:(unsigned int)count layout:(const uint8_t *)layout callback:(void(^)(BOOL isStrong, NSString *varName))block {
+    if (!block) {
+        return;
+    }
+    
+    unsigned int ivarIndex = 0;
+    while (*layout != 0x00 || ivarIndex < count) {
+        if (*layout != 0x00) {
+            int weakCnt = (*layout & 0xf0) >> 4;
+            int strongCnt = *layout & 0xf;
+            int repeatCnt = weakCnt + strongCnt;
+            
+            while (repeatCnt > 0 && ivarIndex < count) {
+                Ivar var = list[ivarIndex++];
+                ptrdiff_t offset = ivar_getOffset(var);
+                
+                if ((offset & 0b111) == 0) {
+                    bool isStrong = weakCnt -- <= 0;
+                    NSString *varName = [NSString stringWithUTF8String:ivar_getName(var)];
+                    block(isStrong, varName);
+                    -- repeatCnt;
+                }
+            }
+            ++ layout;
+        } else {
+            // 全是weak
+            while (ivarIndex < count) {
+                Ivar var = list[ivarIndex++];
+                NSString *varName = [NSString stringWithUTF8String:ivar_getName(var)];
+                block(NO, varName);
+            }
+        }
+    }
 }
 
 @end

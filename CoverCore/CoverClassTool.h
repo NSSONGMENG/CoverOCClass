@@ -41,6 +41,10 @@ typedef NS_ENUM(NSUInteger, CoverRiskLevel) {
 /// 检查用uClass的方法覆盖cClass的风险等级
 + (CoverRiskLevel)getRiskLevelWithClass:(Class)uClass beCoveredClass:(Class)cClass;
 
+/// 获取成员变量强弱引用信息，按Ivar顺序返回，S_开头表示强引用，W_开头表示弱引用，基本数据类型按弱引用算
+/// @param cls 类名
++ (NSArray <NSString *>*)getIvarReferenceInfo:(Class)cls;
+
 @end
 
 NS_ASSUME_NONNULL_END
